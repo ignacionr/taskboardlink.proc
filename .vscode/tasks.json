@@ -13,6 +13,10 @@
 				"compile"
 			],
 			"isBuildCommand": true
+		},
+		{
+			"taskName": "test",
+			"isTestCommand": true
 		}
 	]
 }
