@@ -9,6 +9,7 @@
 #include <dirent.h>
 #include <regex>
 
+#define cimg_use_jpeg
 #include "./CImg.h"
 
 using namespace cimg_library;
