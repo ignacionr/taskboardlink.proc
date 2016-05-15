@@ -76,9 +76,11 @@ int main(int argc, char * argv[]) {
 		free(file_entries);
 		
 		auto widthCount = max_x + 1;
-		auto heightCount = max_y + 1;	
+		auto heightCount = max_y + 1;
+		
 		
 		for(auto y = 0; y < heightCount; y++) {
+			list<pair<int,ImageFeatures::suggestion>> suggestions;	
 			auto x = 0;
 			ImageWithFeatures initial;
 			for(auto got_first = false; !got_first; x++) {
@@ -91,51 +93,20 @@ int main(int argc, char * argv[]) {
 				}
 			}
 
-			auto onewidth = initial.image().width();
 			auto oneheight = initial.image().height();
-			
-			auto totalWidth = widthCount * onewidth;
 			auto canvasHeight = oneheight;
-			cout << "Creating a canvas " << totalWidth/3 << " x " << canvasHeight << endl;
-			
-			CImg<unsigned char> canvas(totalWidth/5,canvasHeight,1,3, 255);
-			int x_correction = 0;
-			int y_correction = 0;
 
-			// paint the first image
-			canvas.draw_image(x_correction, y_correction, initial.image());
-			auto drawn = 1;
-			
+			auto left = initial;			
 			for (x++; x < widthCount; x++) {
 				try {
-					ImageWithFeatures current(file_name(argv[1], y, x));
-					if (current.features().size() > 30) {
-						auto features_left = initial.features();
-						if (features_left.size()) {
-							auto suggestion = current.features().suggest_correction(features_left);
-							if (suggestion.valid()) {
-								y_correction += suggestion.y_correction;
-								x_correction += suggestion.x_correction;
-							}
-							else {
-								x_correction += (x_correction / drawn); // use the average
-							}
-						}
-						else {
-							x_correction += (x_correction / x); // use the average
-						}
-						CImg<unsigned char> &img = current.image();
-						if (img.size()) {
-							cout << '.';
-							canvas.draw_image(x_correction, y_correction, img, 0.8f);
-							drawn++;
-						}
+					ImageWithFeatures right(file_name(argv[1], y, x));
+					auto features_left = initial.features();
+					suggestions.push_back(make_pair(x,right.features().suggest_correction(features_left)));
+					CImg<unsigned char> &img = right.image();
+					if (img.size()) {
+						cout << '.';
 					}
-					else {
-						x_correction += (x_correction / drawn); // use the average
-						cout << "WARNING: this image has too few features" << endl;
-					}
-					initial = current;
+					left = right;
 				}
 				catch(CImgException &ex) {
 					cout << ex.what();
@@ -143,6 +114,34 @@ int main(int argc, char * argv[]) {
 			}
 			cout << endl;
 			
+			// now actually create the row image
+			// the width will be the sum of X corrections plus the width of the last image
+			auto canvasWidth = 0;
+			auto last = 0;
+			for(auto suggestion : suggestions) {
+				canvasWidth += suggestion.second.x_correction;
+				last = suggestion.first;
+			}
+			CImg<unsigned char> lastImage (file_name(argv[1], y, last).c_str());
+			canvasWidth += lastImage.width();
+			cout << "Creating a canvas " << canvasWidth << " x " << canvasHeight << endl;
+			CImg<unsigned char> canvas(canvasWidth,canvasHeight,1,3, 255);
+			// paint the first image
+			int x_correction = 0;
+			int y_correction = 0;
+			canvas.draw_image(x_correction, y_correction, initial.image());
+			auto drawn = 1;
+			for(auto suggestion: suggestions) {
+				if (suggestion.second.valid()) {
+					y_correction += suggestion.second.y_correction;
+					x_correction += suggestion.second.x_correction;
+				}
+				else {
+					x_correction += (x_correction / drawn); // use the average
+				}
+				CImg<unsigned char> img(file_name(argv[1], y, suggestion.first).c_str());
+				canvas.draw_image(x_correction, y_correction, img, 0.85f);
+			}
 			char fname[30];
 			sprintf(fname, "row_%03d.jpg", y);
 			canvas.save_jpeg(fname);
