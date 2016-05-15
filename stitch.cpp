@@ -8,8 +8,8 @@
 #include <sys/types.h>
 #include <dirent.h>
 #include <regex>
+#include <sstream>
 
-#define cimg_use_jpeg
 #include "./CImg.h"
 
 using namespace cimg_library;
@@ -38,6 +38,12 @@ void help() {
 	cout << "   Usage: stitch <path> <out.jpg>" << endl;
 }
 
+string file_name(const string &path, int y, int x) {
+	char buff[250];
+	sprintf(buff, "%s/pic_%03d_%03d.jpg", path.c_str(), y, x);
+	return string(buff);
+}
+
 int main(int argc, char * argv[]) {
 	if (argc < 3)
 	{
@@ -49,7 +55,6 @@ int main(int argc, char * argv[]) {
 		auto max_x = 0;
 
 		struct dirent **file_entries;
-		map<pair<int,int>,ImageWithFeatures> grid;
 		auto count = scandir(argv[1], &file_entries, NULL, NULL);
 		if (-1 == count) {
 			cout << "Can't enumerate " << argv[1] << " : " << errno << endl;
@@ -64,8 +69,6 @@ int main(int argc, char * argv[]) {
 			if (regex_match(fname, match, rxFileNames)) {
 				int y = atol(match[1].str().c_str());
 				int x = atol(match[2].str().c_str());
-				cout << "Reading " << y << ", " << x << endl;
-				grid[make_pair(x,y)] = ImageWithFeatures(string(argv[1]) + "/" + fname);
 				max_x = max(x, max_x);
 				max_y = max(y, max_y);
 			}
@@ -73,48 +76,74 @@ int main(int argc, char * argv[]) {
 		free(file_entries);
 		
 		auto widthCount = max_x + 1;
-		auto heightCount = max_y + 1;
+		auto heightCount = max_y + 1;	
 		
-		auto oneimg = (*grid.cbegin()).second;
-		
-		auto onewidth = oneimg.image().width();
-		auto oneheight = oneimg.image().height();
-		
-		auto totalWidth = widthCount * onewidth;
-		auto canvasHeight = oneheight;
-
-		char fname[250];
 		for(auto y = 0; y < heightCount; y++) {
+			auto x = 0;
+			ImageWithFeatures initial;
+			for(auto got_first = false; !got_first; x++) {
+				try {
+					initial = ImageWithFeatures(file_name(argv[1], y, x));
+					got_first = true;
+				}
+				catch(CImgException &ex) {
+					cout << ex.what();
+				}
+			}
 
+			auto onewidth = initial.image().width();
+			auto oneheight = initial.image().height();
+			
+			auto totalWidth = widthCount * onewidth;
+			auto canvasHeight = oneheight;
 			cout << "Creating a canvas " << totalWidth/3 << " x " << canvasHeight << endl;
 			
-			CImg<unsigned char> canvas(totalWidth/3,canvasHeight,1,3, 255);
+			CImg<unsigned char> canvas(totalWidth/5,canvasHeight,1,3, 255);
 			int x_correction = 0;
 			int y_correction = 0;
-			for (auto x = 0; x < widthCount; x++) {
-				auto this_image_features = grid[make_pair(x,y)];
-				if (x > 0) {
-					auto imgf = grid[make_pair(x-1,y)];
-					auto features_left = imgf.features();
-					if (features_left.size()) {
-						auto suggestion = this_image_features.features().suggest_correction(features_left);
-						if (suggestion.valid()) {
-							y_correction += suggestion.y_correction;
-							x_correction += suggestion.x_correction;
+
+			// paint the first image
+			canvas.draw_image(x_correction, y_correction, initial.image());
+			auto drawn = 1;
+			
+			for (x++; x < widthCount; x++) {
+				try {
+					ImageWithFeatures current(file_name(argv[1], y, x));
+					if (current.features().size() > 30) {
+						auto features_left = initial.features();
+						if (features_left.size()) {
+							auto suggestion = current.features().suggest_correction(features_left);
+							if (suggestion.valid()) {
+								y_correction += suggestion.y_correction;
+								x_correction += suggestion.x_correction;
+							}
+							else {
+								x_correction += (x_correction / drawn); // use the average
+							}
 						}
 						else {
 							x_correction += (x_correction / x); // use the average
 						}
+						CImg<unsigned char> &img = current.image();
+						if (img.size()) {
+							cout << '.';
+							canvas.draw_image(x_correction, y_correction, img, 0.8f);
+							drawn++;
+						}
 					}
+					else {
+						x_correction += (x_correction / drawn); // use the average
+						cout << "WARNING: this image has too few features" << endl;
+					}
+					initial = current;
 				}
-				CImg<unsigned char> &img = this_image_features.image();
-				if (img.size()) {
-					cout << '.';
-					canvas.draw_image(x_correction, y_correction, img, 0.8f);
+				catch(CImgException &ex) {
+					cout << ex.what();
 				}
 			}
 			cout << endl;
 			
+			char fname[30];
 			sprintf(fname, "row_%03d.jpg", y);
 			canvas.save_jpeg(fname);
 			cout<< fname << " saved." << endl;		

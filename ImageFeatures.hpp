@@ -17,7 +17,7 @@ public:
 		}
 		
 		auto max_contrast = max_brightness - min_brightness;
-		cout << min_brightness << ".." << max_brightness << " (" << max_contrast << ")" << endl;
+		// cout << min_brightness << ".." << max_brightness << " (" << max_contrast << ")" << endl;
 		auto threshold = max_contrast / 15;
 		if (threshold > 10) {
 			for(auto y= 0; img.height() > y; y++) {
@@ -46,14 +46,14 @@ public:
 			}
 		}
 		else {
-			cout << "WARNING: this image can't be used" << endl;
+			cout << "WARNING: this image can't be used (contrast is too low)" << endl;
 		}
 
 		// unsigned char featureColor[] = {255,0,0};
 		// for(auto feat: *this) {
 		// 	img.draw_circle(feat.first, feat.second, 5, (unsigned char*)&featureColor);
 		// }
-		cout << "Total features: " << size() << endl;
+		// cout << "Total features: " << size() << endl;
 	}
 	// suggests a small correction on y (.first) and a bigger one on x (.second)
 	struct suggestion {
@@ -73,7 +73,7 @@ public:
 				best.x_correction = current_result.first;
 			}
 		}
-		cout << "suggesting a y correction of " << best.y_correction << endl;
+		// cout << "suggesting a y correction of " << best.y_correction << endl;
 		return best;
 	}
 	
