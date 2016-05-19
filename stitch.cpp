@@ -9,6 +9,7 @@
 #include <dirent.h>
 #include <regex>
 #include <sstream>
+#include <stdexcept>
 
 #include "./CImg.h"
 
@@ -39,6 +40,29 @@ void help() {
 	cout << "   Usage: stitch <img1.jpg> <img2.jpg> <out.jpg>" << endl;
 }
 
+void stitch_images(string left_src, string right_src, string output) {
+	ImageWithFeatures left(left_src.c_str());
+	ImageWithFeatures right(right_src.c_str());
+
+	auto suggestion = right.features().suggest_correction(left.features());
+	if (!suggestion.valid()) {
+		throw runtime_error("Images seem unrelated.");
+	}
+
+	auto canvasHeight = left.image().height() + abs(suggestion.y_correction);
+	auto canvasWidth = left.image().width() + right.image().width() + suggestion.x_correction;
+				
+	cout << "Creating a canvas " << canvasWidth << " x " << canvasHeight << endl;
+	CImg<unsigned char> canvas(canvasWidth,canvasHeight,1,3, 255);
+	
+	auto y = suggestion.y_correction > 0 ? 0 : abs(suggestion.y_correction);
+	// paint the first image
+	canvas.draw_image(0, y, left.image());
+	canvas.draw_image(suggestion.x_correction, y + suggestion.y_correction, right.image(), 0.85f);
+	canvas.save_jpeg(output.c_str());
+	cout<< output << " saved." << endl;
+}
+
 int main(int argc, char * argv[]) {
 	if (argc < 4)
 	{
@@ -46,29 +70,9 @@ int main(int argc, char * argv[]) {
 		return 1;
 	}
 	try {
-		ImageWithFeatures left(argv[1]);
-		ImageWithFeatures right(argv[2]);
-
-		auto suggestion = right.features().suggest_correction(left.features());
-		if (!suggestion.valid()) {
-			cout << "Images seem unrelated." << endl;
-			return 1;
-		}
-
-		auto canvasHeight = left.image().height() + abs(suggestion.y_correction);
-		auto canvasWidth = left.image().width() + right.image().width() + suggestion.x_correction;
-					
-		cout << "Creating a canvas " << canvasWidth << " x " << canvasHeight << endl;
-		CImg<unsigned char> canvas(canvasWidth,canvasHeight,1,3, 255);
-		
-		auto y = suggestion.y_correction > 0 ? 0 : abs(suggestion.y_correction);
-		// paint the first image
-		canvas.draw_image(0, y, left.image());
-		canvas.draw_image(suggestion.x_correction, y + suggestion.y_correction, right.image(), 0.85f);
-		canvas.save_jpeg(argv[3]);
-		cout<< argv[3] << " saved." << endl;		
+		stitch_images(argv[1], argv[2], argv[3]);
 	}
-	catch(CImgException& ex) {
+	catch(exception& ex) {
 		cout << "ERROR: " << ex.what() << endl;
 	}
 	return 0;
