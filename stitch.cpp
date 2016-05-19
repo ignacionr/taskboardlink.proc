@@ -22,10 +22,11 @@ class ImageWithFeatures {
 	CImg<unsigned char> _img;
 	ImageFeatures _features;
 public:
-	ImageWithFeatures(const string& path) {
-		cout << "reading " << path << endl;
+	ImageWithFeatures(const string& path, bool is_left_image) {
+		cout << "reading " << path;
 		_img = CImg<unsigned char>(path.c_str());
-		_features = ImageFeatures(_img);
+		cout << " " << _img.width() << "x" << _img.height() << endl;
+		_features = ImageFeatures(_img, is_left_image);
 	}
 	ImageWithFeatures(const ImageWithFeatures& src) {
 		_img = src._img;
@@ -41,8 +42,8 @@ void help() {
 }
 
 void stitch_images(string left_src, string right_src, string output) {
-	ImageWithFeatures left(left_src.c_str());
-	ImageWithFeatures right(right_src.c_str());
+	ImageWithFeatures left(left_src.c_str(), true);
+	ImageWithFeatures right(right_src.c_str(), false);
 
 	auto suggestion = right.features().suggest_correction(left.features());
 	if (!suggestion.valid()) {

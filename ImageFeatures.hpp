@@ -1,14 +1,16 @@
 
 class ImageFeatures: public vector<pair<int,int>> {
 	
-	#define MAX_FEATURES 30000
+	#define MAX_FEATURES 3000
 	#define MIN_THRESHOLD 10
 	#define MIN_DISTANCE	30
 	#define MAX_DISTANCE	200
 public:
 	ImageFeatures() { }
-	ImageFeatures(CImg<unsigned char> &img, int feature_x_margin = 10) {
-		// obtain the extreme values
+	ImageFeatures(CImg<unsigned char> &img, bool is_left_image) {
+		auto from_x = is_left_image ? MAX_DISTANCE : 0;
+		auto to_x = is_left_image ? img.width() : img.width() - MAX_DISTANCE;
+
 		int max_brightness = 0, min_brightness = 255;
 		for(auto pixel_it = img.begin(); pixel_it < img.end(); pixel_it++) {
 			int brightness = *pixel_it;
@@ -30,8 +32,8 @@ public:
 			auto threshold = max_contrast / factor;
 			cout << "trying with threshold = " << threshold << endl;
 			for(auto y= 0; (img.height() > y) && go_on; y++) {
-				auto left_brightness = img(feature_x_margin,y,0) + img(feature_x_margin,y,1) + img(feature_x_margin,y,2); 
-				for(auto x = feature_x_margin+1; (x < img.width()-feature_x_margin) && go_on; x++) {
+				auto left_brightness = img(from_x,y,0) + img(from_x,y,1) + img(from_x,y,2); 
+				for(auto x = from_x+1; (x <= to_x) && go_on; x++) {
 					auto right_brightness = img(x,y,0) + img(x,y,1) + img(x,y,2);
 					auto contrast = abs(right_brightness- left_brightness);
 					if (contrast > threshold) {
@@ -45,7 +47,7 @@ public:
 					left_brightness = right_brightness;
 				}
 			}
-			for(auto x = feature_x_margin; (x < img.width()-feature_x_margin) && go_on; x++) {
+			for(auto x = from_x; (x <= to_x) && go_on; x++) {
 				auto up_brightness = img(x,0,0) + img(x,0,1) + img(x,0,2); 
 				for(auto y= 1; (img.height() > y) && go_on; y++) {
 					auto down_brightness = img(x,y,0) + img(x,y,1) + img(x,y,2);
