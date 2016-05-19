@@ -1,5 +1,10 @@
 
 class ImageFeatures: public vector<pair<int,int>> {
+	
+	#define MAX_FEATURES 30000
+	#define MIN_THRESHOLD 10
+	#define MIN_DISTANCE	30
+	#define MAX_DISTANCE	200
 public:
 	ImageFeatures() { }
 	ImageFeatures(CImg<unsigned char> &img, int feature_x_margin = 10) {
@@ -17,43 +22,52 @@ public:
 		}
 		
 		auto max_contrast = max_brightness - min_brightness;
-		// cout << min_brightness << ".." << max_brightness << " (" << max_contrast << ")" << endl;
-		auto threshold = max_contrast / 15;
-		if (threshold > 10) {
-			for(auto y= 0; img.height() > y; y++) {
+		cout << "max_contrast is " << max_contrast << endl;
+		
+		for(auto factor = max_contrast / MIN_THRESHOLD; empty() && (factor < 500) && (factor > 1); factor -= 2) {
+			auto go_on = true;
+			// cout << min_brightness << ".." << max_brightness << " (" << max_contrast << ")" << endl;
+			auto threshold = max_contrast / factor;
+			cout << "trying with threshold = " << threshold << endl;
+			for(auto y= 0; (img.height() > y) && go_on; y++) {
 				auto left_brightness = img(feature_x_margin,y,0) + img(feature_x_margin,y,1) + img(feature_x_margin,y,2); 
-				for(auto x = feature_x_margin+1; x < img.width()-feature_x_margin; x++) {
+				for(auto x = feature_x_margin+1; (x < img.width()-feature_x_margin) && go_on; x++) {
 					auto right_brightness = img(x,y,0) + img(x,y,1) + img(x,y,2);
 					auto contrast = abs(right_brightness- left_brightness);
 					if (contrast > threshold) {
 						push_back(make_pair(x,y));
-						// cout << "found feature: @" << x << "," << y << endl;
+						if (size() > MAX_FEATURES) {
+							cout << "Too many features!" << endl;
+							clear();
+							go_on = false;
+						}
 					}
 					left_brightness = right_brightness;
 				}
 			}
-			for(auto x = feature_x_margin; x < img.width()-feature_x_margin; x++) {
+			for(auto x = feature_x_margin; (x < img.width()-feature_x_margin) && go_on; x++) {
 				auto up_brightness = img(x,0,0) + img(x,0,1) + img(x,0,2); 
-				for(auto y= 1; img.height() > y; y++) {
+				for(auto y= 1; (img.height() > y) && go_on; y++) {
 					auto down_brightness = img(x,y,0) + img(x,y,1) + img(x,y,2);
 					auto contrast = abs(up_brightness - down_brightness);
 					if (contrast > threshold) {
 						push_back(make_pair(x,y));
-						// cout << "found feature: @" << x << "," << y << endl;
+						if (size() > MAX_FEATURES) {
+							cout << "Too many features!" << endl;
+							clear();
+							go_on = false;
+						}
 					}
 					up_brightness = down_brightness;
 				}
 			}
-		}
-		else {
-			cout << "WARNING: this image can't be used (contrast is too low)" << endl;
 		}
 
 		// unsigned char featureColor[] = {255,0,0};
 		// for(auto feat: *this) {
 		// 	img.draw_circle(feat.first, feat.second, 5, (unsigned char*)&featureColor);
 		// }
-		// cout << "Total features: " << size() << endl;
+		cout << "Total features: " << size() << endl;
 	}
 	// suggests a small correction on y (.first) and a bigger one on x (.second)
 	struct suggestion {
@@ -73,7 +87,8 @@ public:
 				best.x_correction = current_result.first;
 			}
 		}
-		// cout << "suggesting a y correction of " << best.y_correction << endl;
+		cout << "suggesting an x correction of " << best.x_correction << endl;
+		cout << "suggesting a y correction of " << best.y_correction << endl;
 		return best;
 	}
 	
@@ -87,7 +102,9 @@ public:
 			auto this_range = features_by_y.equal_range(feature.second);
 			for (auto it = this_range.first; it != this_range.second; it++) {
 				auto distance = feature.first - (*it).second;
-				correction_votes[distance]++;
+				if (distance > MIN_DISTANCE && abs(distance) < MAX_DISTANCE) {
+					correction_votes[distance]++;
+				}
 			}
 		}
 		auto pmax_vote = max_element(correction_votes.begin(), correction_votes.end(), [] (const pair<int,int>&e1, const pair<int,int>&e2) {
