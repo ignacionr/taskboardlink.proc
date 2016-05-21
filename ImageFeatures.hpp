@@ -1,16 +1,17 @@
 
 class ImageFeatures: public vector<pair<int,int>> {
 	
-	#define MAX_FEATURES 		20000
+	#define MAX_FEATURES 		10000
 	#define MIN_THRESHOLD 		5
-	#define MIN_DISTANCE		30
-	#define MAX_DISTANCE		400
-	#define MAX_Y_CORRECTION	60
+	#define MIN_DISTANCE		80
+	#define MAX_DISTANCE		500
+	#define MAX_Y_CORRECTION	30
+	#define	MARGIN_X			2
 public:
 	ImageFeatures() { }
-	ImageFeatures(CImg<unsigned char> &img, bool is_left_image) {
-		auto from_x = max(is_left_image ? (img.width() - MAX_DISTANCE*2) : 0, 0);
-		auto to_x = min(is_left_image ? img.width() : MAX_DISTANCE * 2, img.width());
+	ImageFeatures(CImg<unsigned char> &img, bool is_left_image, bool x_ray) {
+		auto from_x = max(is_left_image ? (img.width() - MAX_DISTANCE) : 0, MARGIN_X);
+		auto to_x = min(is_left_image ? img.width() : MAX_DISTANCE, img.width() - MARGIN_X);
 
 		int max_brightness = 0, min_brightness = 255;
 		for(auto pixel_it = img.begin(); pixel_it < img.end(); pixel_it++) {
@@ -63,15 +64,17 @@ public:
 			}
 		}
 
-		// unsigned char featureColor[] = {255,0,0};
-		// if (!is_left_image)
-		// {
-		// 	featureColor[0] = 0;
-		// 	featureColor[1] = 255;
-		// }
-		// for(auto feat: *this) {
-		// 	img.draw_circle(feat.first, feat.second, 2, (unsigned char*)&featureColor);
-		// }
+		if (x_ray) {
+			unsigned char featureColor[] = {255,0,0};
+			if (!is_left_image)
+			{
+				featureColor[0] = 0;
+				featureColor[1] = 255;
+			}
+			for(auto feat: *this) {
+				img.draw_circle(feat.first, feat.second, 2, (unsigned char*)&featureColor);
+			}
+		}
 		cout << "Total features: " << size() << " (threshold " << threshold << ")" << endl;
 	}
 	// suggests a small correction on y (.first) and a bigger one on x (.second)
@@ -82,10 +85,10 @@ public:
 		bool	valid() {return votes > 6;}
 	};
 	
-	suggestion suggest_correction(const ImageFeatures &other) {
+	suggestion suggest_correction(const ImageFeatures &other, int left_width) {
 		suggestion best;
 		for (auto y_correction = -MAX_Y_CORRECTION; y_correction <= MAX_Y_CORRECTION; y_correction++) {
-			auto current_result = suggest_correction(other, y_correction);
+			auto current_result = suggest_correction(other, y_correction, left_width);
 			if (current_result.second > best.votes) {
 				best.votes = current_result.second;
 				best.y_correction = y_correction;
@@ -97,7 +100,7 @@ public:
 		return best;
 	}
 	
-	pair<int,int> suggest_correction(const ImageFeatures &other, int moving_y) const {
+	pair<int,int> suggest_correction(const ImageFeatures &other, int moving_y, int left_width) const {
 		multimap<int,int> features_by_y;
 		for(auto feature: *this) {
 			features_by_y.insert(make_pair(feature.second + moving_y, feature.first));
@@ -106,9 +109,10 @@ public:
 		for(auto feature: other) {
 			auto this_range = features_by_y.equal_range(feature.second);
 			for (auto it = this_range.first; it != this_range.second; it++) {
-				auto distance = feature.first - (*it).second;
-				if (distance > MIN_DISTANCE && abs(distance) < MAX_DISTANCE) {
-					correction_votes[distance]++;
+				auto x_correction = feature.first - (*it).second;
+				auto distance = abs(left_width - x_correction);
+				if ((distance >= MIN_DISTANCE) && (distance <= MAX_DISTANCE)) {
+					correction_votes[x_correction]++;
 				}
 			}
 		}

@@ -22,11 +22,11 @@ class ImageWithFeatures {
 	CImg<unsigned char> _img;
 	ImageFeatures _features;
 public:
-	ImageWithFeatures(const string& path, bool is_left_image) {
+	ImageWithFeatures(const string& path, bool is_left_image, bool x_ray) {
 		cout << "reading " << path;
 		_img = CImg<unsigned char>(path.c_str());
 		cout << " " << _img.width() << "x" << _img.height() << endl;
-		_features = ImageFeatures(_img, is_left_image);
+		_features = ImageFeatures(_img, is_left_image, x_ray);
 	}
 	ImageWithFeatures(const ImageWithFeatures& src) {
 		_img = src._img;
@@ -43,11 +43,11 @@ void help() {
 	cout << "		stitch -one <left.jpg> <right.jpg> <output.jpg>" << endl;
 }
 
-void stitch_images(string left_src, string right_src, string output) {
-	ImageWithFeatures left(left_src.c_str(), true);
-	ImageWithFeatures right(right_src.c_str(), false);
+void stitch_images(string left_src, string right_src, string output, bool x_ray) {
+	ImageWithFeatures left(left_src.c_str(), true, x_ray);
+	ImageWithFeatures right(right_src.c_str(), false, x_ray);
 
-	auto suggestion = right.features().suggest_correction(left.features());
+	auto suggestion = right.features().suggest_correction(left.features(), left.image().width());
 	if (!suggestion.valid()) {
 		throw runtime_error("Images seem unrelated.");
 	}
@@ -59,9 +59,15 @@ void stitch_images(string left_src, string right_src, string output) {
 	CImg<unsigned char> canvas(canvasWidth,canvasHeight,1,3, 255);
 	
 	auto y = suggestion.y_correction > 0 ? 0 : abs(suggestion.y_correction);
-	// paint the first image
-	canvas.draw_image(0, y, left.image(), 0.85f);
-	canvas.draw_image(suggestion.x_correction, y + suggestion.y_correction, right.image(), 0.85f);
+
+	if (x_ray) {
+		canvas.draw_image(0, y, left.image(), 0.55f);
+		canvas.draw_image(suggestion.x_correction, y + suggestion.y_correction, right.image(), 0.55f);
+	}
+	else {
+		canvas.draw_image(0, y, left.image());
+		canvas.draw_image(suggestion.x_correction, y + suggestion.y_correction, right.image());
+	}
 	canvas.save_jpeg(output.c_str());
 	cout<< output << " saved." << endl;
 }
@@ -78,22 +84,64 @@ string output_name(int row, int col1, int col2) {
 	return buff;
 }
 
-void stitch_pairs_by_row(const string &path) {
-	int max_col = 1;
-	for(int row = 0; max_col > 0; row++) {
-		bool succeeded = true;
-		max_col = 0;
-		for (int col = 1; succeeded; col += 2) {
-			try {
-				stitch_images(file_name(path, row, col), file_name(path, row, col+1),
-					output_name(row, col, col+1));
-				max_col = col;
+void stitch_pairs_by_row(const string &path, bool x_ray) {
+	struct dirent **name_list;
+	int n = scandir(path.c_str(), &name_list, NULL, alphasort);
+	if (n < 0) {
+		throw runtime_error("can't scan directory");
+	}
+	
+	regex input_rex("([^_]+)_(\\d+)_(\\d+)(-(\\d+))?\\.jpg");
+	smatch input_match;
+	
+	int current_row = -1;
+	int next_col = -1;
+	int left_col = -1;
+	string left_file;
+	string sep("/");
+	for(int entry_index = 0; entry_index < n; entry_index++) {
+		auto &entry = name_list[entry_index];
+		string file_name(entry->d_name);
+		cout << "analizing " << file_name << endl;
+		if (regex_match(file_name, input_match, input_rex)) {
+			int row = atol(input_match[2].str().c_str());
+			int col = atol(input_match[3].str().c_str());
+			int rightmost = input_match[5].length() ? atol(input_match[5].str().c_str()) : col;
+			if (row == current_row && col == next_col) {
+				cout << " good for right image" << endl;
+				// this is the right part to our left
+				// so, stitch both into a third and remove them afterwards
+				char output_name[50];
+				sprintf(output_name, "img_%03d_%03d-%03d.jpg", current_row, left_col, rightmost);
+				try {
+					stitch_images(
+						path + sep + left_file, 
+						path + sep + file_name, 
+						path + sep + output_name, x_ray);
+					remove((path + sep + left_file).c_str());
+					remove((path + sep + file_name).c_str());
+				}
+				catch(exception &ex) {
+					cout << "Discontinuity: " << ex.what();
+				}
+				current_row = -1;
 			}
-			catch(exception &) {
-				succeeded = false;
+			else {
+				cout << " using row " << row << endl;
+				// we'll use this as the left image
+				current_row = row;
+				left_col = col;
+				next_col = rightmost + 1;
+				left_file = file_name;
 			}
 		}
+		else {
+			cout << "not a match" << endl;
+		}
+		free(entry);
 	}
+	
+	free (name_list);
 }
 
 int main(int argc, char * argv[]) {
@@ -102,12 +150,15 @@ int main(int argc, char * argv[]) {
 		help();
 		return 1;
 	}
+	bool x_ray = 
+		(argc > 2 && 0 == strcmp(argv[2], "-xray")) ||
+		(argc > 4 && 0 == strcmp(argv[4], "-xray"));
 	try {
 		if (0 == strcmp(argv[1], "-one")) {
-			stitch_images(argv[2], argv[3], argv[4]);
+			stitch_images(argv[2], argv[3], argv[4], x_ray);
 		} else 
 		{
-			stitch_pairs_by_row(argv[1]);
+			stitch_pairs_by_row(argv[1], x_ray);
 		}
 	}
 	catch(exception& ex) {

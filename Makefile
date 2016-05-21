@@ -1,7 +1,9 @@
 compile: stitch
 
-test: stitch
-	./stitch ~/Downloads/imgs3
+test: test.done
+
+test.done: stitch
+	rm -Rf test* && mkdir test && cp ~/Downloads/imgs3/*.jpg ./test && ./stitch test/. && touch test.done
 	
 test-one: stitch
 	./stitch -one ./st_004_023-024.jpg ./st_004_025-026.jpg ./st_004_023-026.jpg
