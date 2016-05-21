@@ -1,15 +1,16 @@
 
 class ImageFeatures: public vector<pair<int,int>> {
 	
-	#define MAX_FEATURES 3000
-	#define MIN_THRESHOLD 10
-	#define MIN_DISTANCE	30
-	#define MAX_DISTANCE	200
+	#define MAX_FEATURES 		20000
+	#define MIN_THRESHOLD 		5
+	#define MIN_DISTANCE		30
+	#define MAX_DISTANCE		400
+	#define MAX_Y_CORRECTION	60
 public:
 	ImageFeatures() { }
 	ImageFeatures(CImg<unsigned char> &img, bool is_left_image) {
-		auto from_x = is_left_image ? MAX_DISTANCE : 0;
-		auto to_x = is_left_image ? img.width() : img.width() - MAX_DISTANCE;
+		auto from_x = max(is_left_image ? (img.width() - MAX_DISTANCE*2) : 0, 0);
+		auto to_x = min(is_left_image ? img.width() : MAX_DISTANCE * 2, img.width());
 
 		int max_brightness = 0, min_brightness = 255;
 		for(auto pixel_it = img.begin(); pixel_it < img.end(); pixel_it++) {
@@ -26,11 +27,10 @@ public:
 		auto max_contrast = max_brightness - min_brightness;
 		cout << "max_contrast is " << max_contrast << endl;
 		
+		int threshold = 0;
 		for(auto factor = max_contrast / MIN_THRESHOLD; empty() && (factor < 500) && (factor > 1); factor -= 2) {
 			auto go_on = true;
-			// cout << min_brightness << ".." << max_brightness << " (" << max_contrast << ")" << endl;
-			auto threshold = max_contrast / factor;
-			cout << "trying with threshold = " << threshold << endl;
+			threshold = max_contrast / factor;
 			for(auto y= 0; (img.height() > y) && go_on; y++) {
 				auto left_brightness = img(from_x,y,0) + img(from_x,y,1) + img(from_x,y,2); 
 				for(auto x = from_x+1; (x <= to_x) && go_on; x++) {
@@ -39,7 +39,6 @@ public:
 					if (contrast > threshold) {
 						push_back(make_pair(x,y));
 						if (size() > MAX_FEATURES) {
-							cout << "Too many features!" << endl;
 							clear();
 							go_on = false;
 						}
@@ -55,7 +54,6 @@ public:
 					if (contrast > threshold) {
 						push_back(make_pair(x,y));
 						if (size() > MAX_FEATURES) {
-							cout << "Too many features!" << endl;
 							clear();
 							go_on = false;
 						}
@@ -66,10 +64,15 @@ public:
 		}
 
 		// unsigned char featureColor[] = {255,0,0};
-		// for(auto feat: *this) {
-		// 	img.draw_circle(feat.first, feat.second, 5, (unsigned char*)&featureColor);
+		// if (!is_left_image)
+		// {
+		// 	featureColor[0] = 0;
+		// 	featureColor[1] = 255;
 		// }
-		cout << "Total features: " << size() << endl;
+		// for(auto feat: *this) {
+		// 	img.draw_circle(feat.first, feat.second, 2, (unsigned char*)&featureColor);
+		// }
+		cout << "Total features: " << size() << " (threshold " << threshold << ")" << endl;
 	}
 	// suggests a small correction on y (.first) and a bigger one on x (.second)
 	struct suggestion {
@@ -81,7 +84,7 @@ public:
 	
 	suggestion suggest_correction(const ImageFeatures &other) {
 		suggestion best;
-		for (auto y_correction = -18; y_correction <= 18; y_correction++) {
+		for (auto y_correction = -MAX_Y_CORRECTION; y_correction <= MAX_Y_CORRECTION; y_correction++) {
 			auto current_result = suggest_correction(other, y_correction);
 			if (current_result.second > best.votes) {
 				best.votes = current_result.second;

@@ -38,7 +38,9 @@ public:
 };
 
 void help() {
-	cout << "   Usage: stitch <img1.jpg> <img2.jpg> <out.jpg>" << endl;
+	cout << "   Usage: " << endl;
+	cout << "		stitch <source-path>" << endl;
+	cout << "		stitch -one <left.jpg> <right.jpg> <output.jpg>" << endl;
 }
 
 void stitch_images(string left_src, string right_src, string output) {
@@ -51,27 +53,62 @@ void stitch_images(string left_src, string right_src, string output) {
 	}
 
 	auto canvasHeight = left.image().height() + abs(suggestion.y_correction);
-	auto canvasWidth = left.image().width() + right.image().width() + suggestion.x_correction;
+	auto canvasWidth = right.image().width() + suggestion.x_correction;
 				
 	cout << "Creating a canvas " << canvasWidth << " x " << canvasHeight << endl;
 	CImg<unsigned char> canvas(canvasWidth,canvasHeight,1,3, 255);
 	
 	auto y = suggestion.y_correction > 0 ? 0 : abs(suggestion.y_correction);
 	// paint the first image
-	canvas.draw_image(0, y, left.image());
+	canvas.draw_image(0, y, left.image(), 0.85f);
 	canvas.draw_image(suggestion.x_correction, y + suggestion.y_correction, right.image(), 0.85f);
 	canvas.save_jpeg(output.c_str());
 	cout<< output << " saved." << endl;
 }
 
+string file_name(string path, int row, int col) {
+	char buff[100];
+	sprintf(buff, "pic_%03d_%03d.jpg", row, col);
+	return path + "/" + buff;
+}
+
+string output_name(int row, int col1, int col2) {
+	char buff[100];
+	sprintf(buff, "st_%03d_%03d-%03d.jpg", row, col1, col2);
+	return buff;
+}
+
+void stitch_pairs_by_row(const string &path) {
+	int max_col = 1;
+	for(int row = 0; max_col > 0; row++) {
+		bool succeeded = true;
+		max_col = 0;
+		for (int col = 1; succeeded; col += 2) {
+			try {
+				stitch_images(file_name(path, row, col), file_name(path, row, col+1),
+					output_name(row, col, col+1));
+				max_col = col;
+			}
+			catch(exception &) {
+				succeeded = false;
+			}
+		}
+	}
+}
+
 int main(int argc, char * argv[]) {
-	if (argc < 4)
+	if (argc < 2)
 	{
 		help();
 		return 1;
 	}
 	try {
-		stitch_images(argv[1], argv[2], argv[3]);
+		if (0 == strcmp(argv[1], "-one")) {
+			stitch_images(argv[2], argv[3], argv[4]);
+		} else 
+		{
+			stitch_pairs_by_row(argv[1]);
+		}
 	}
 	catch(exception& ex) {
 		cout << "ERROR: " << ex.what() << endl;
