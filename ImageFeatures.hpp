@@ -1,17 +1,17 @@
 
 class ImageFeatures: public vector<pair<int,int>> {
 	
-	#define MAX_FEATURES 		10000
+	#define MAX_FEATURES 		1000
 	#define MIN_THRESHOLD 		5
-	#define MIN_DISTANCE		80
+	#define	MARGIN_X			7
+	#define MIN_DISTANCE		MARGIN_X
 	#define MAX_DISTANCE		500
 	#define MAX_Y_CORRECTION	30
-	#define	MARGIN_X			2
 public:
 	ImageFeatures() { }
 	ImageFeatures(CImg<unsigned char> &img, bool is_left_image, bool x_ray) {
-		auto from_x = max(is_left_image ? (img.width() - MAX_DISTANCE) : 0, MARGIN_X);
-		auto to_x = min(is_left_image ? img.width() : MAX_DISTANCE, img.width() - MARGIN_X);
+		auto from_x = MARGIN_X;
+		auto to_x = img.width() - MARGIN_X;
 
 		int max_brightness = 0, min_brightness = 255;
 		for(auto pixel_it = img.begin(); pixel_it < img.end(); pixel_it++) {
@@ -110,10 +110,10 @@ public:
 			auto this_range = features_by_y.equal_range(feature.second);
 			for (auto it = this_range.first; it != this_range.second; it++) {
 				auto x_correction = feature.first - (*it).second;
-				auto distance = abs(left_width - x_correction);
-				if ((distance >= MIN_DISTANCE) && (distance <= MAX_DISTANCE)) {
+				// auto distance = abs(left_width - abs(x_correction));
+				// if ((distance >= MIN_DISTANCE) && (distance <= MAX_DISTANCE)) {
 					correction_votes[x_correction]++;
-				}
+				// }
 			}
 		}
 		auto pmax_vote = max_element(correction_votes.begin(), correction_votes.end(), [] (const pair<int,int>&e1, const pair<int,int>&e2) {

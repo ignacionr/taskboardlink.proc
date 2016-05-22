@@ -53,7 +53,7 @@ void stitch_images(string left_src, string right_src, string output, bool x_ray)
 	}
 
 	auto canvasHeight = left.image().height() + abs(suggestion.y_correction);
-	auto canvasWidth = right.image().width() + suggestion.x_correction;
+	auto canvasWidth = max(right.image().width() + suggestion.x_correction, left.image().width());
 				
 	cout << "Creating a canvas " << canvasWidth << " x " << canvasHeight << endl;
 	CImg<unsigned char> canvas(canvasWidth,canvasHeight,1,3, 255);
@@ -152,7 +152,7 @@ int main(int argc, char * argv[]) {
 	}
 	bool x_ray = 
 		(argc > 2 && 0 == strcmp(argv[2], "-xray")) ||
-		(argc > 4 && 0 == strcmp(argv[4], "-xray"));
+		(argc > 5 && 0 == strcmp(argv[5], "-xray"));
 	try {
 		if (0 == strcmp(argv[1], "-one")) {
 			stitch_images(argv[2], argv[3], argv[4], x_ray);
